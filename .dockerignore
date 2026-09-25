@@ -1,0 +1,7 @@
+node_modules
+.next
+.git
+legacy
+.env*
+!.env.example
+drizzle/meta/*.snapshot.json.bak

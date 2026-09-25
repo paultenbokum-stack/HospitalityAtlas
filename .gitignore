@@ -6,3 +6,6 @@ env.yaml
 .DS_Store
 Thumbs.db
 .idea/
+.next/
+*.tsbuildinfo
+!.env.example

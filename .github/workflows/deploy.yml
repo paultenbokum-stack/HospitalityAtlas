@@ -1,0 +1,85 @@
+name: Deploy
+
+# Push to main → lint + test → build image → Artifact Registry → migrate + seed Cloud SQL → Cloud Run.
+# One-time GCP setup and the secrets list: docs/DEPLOYMENT.md.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_DB: atlas_test, POSTGRES_USER: atlas, POSTGRES_PASSWORD: atlas }
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://atlas:atlas@localhost:5432/atlas_test
+      TEST_DATABASE_URL: postgres://atlas:atlas@localhost:5432/atlas_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm run db:migrate
+      - run: npm test
+
+  deploy:
+    needs: test
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }} # flip on once docs/DEPLOYMENT.md setup is done
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGE: ${{ secrets.CLOUD_RUN_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.ARTIFACT_REPO }}/atlas-crm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build & push image
+        run: |
+          gcloud auth configure-docker ${{ secrets.CLOUD_RUN_REGION }}-docker.pkg.dev --quiet
+          docker build \
+            --build-arg NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY="${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY }}" \
+            -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" .
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+      - name: Migrate + seed (via Cloud SQL Auth Proxy)
+        run: |
+          curl -sSL -o cloud-sql-proxy \
+            https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+          ./cloud-sql-proxy "${{ secrets.CLOUD_SQL_INSTANCE }}" --port 5432 &
+          for i in $(seq 1 15); do (echo > /dev/tcp/127.0.0.1/5432) >/dev/null 2>&1 && break; sleep 1; done
+          npm run db:migrate
+          npm run db:seed
+        env:
+          DATABASE_URL: postgres://${{ secrets.DB_USER }}:${{ secrets.DB_PASS }}@127.0.0.1:5432/${{ secrets.DB_NAME }}
+          ROOT_ADMIN_EMAIL: ${{ secrets.ROOT_ADMIN_EMAIL }}
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${{ secrets.CLOUD_RUN_SERVICE }}" \
+            --image "$IMAGE:${{ github.sha }}" \
+            --region "${{ secrets.CLOUD_RUN_REGION }}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --min-instances 0 \
+            --add-cloudsql-instances "${{ secrets.CLOUD_SQL_INSTANCE }}" \
+            --set-env-vars "AUTH_URL=${{ secrets.APP_URL }},AUTH_TRUST_HOST=true,NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY=${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY }}" \
+            --set-secrets "DATABASE_URL=DATABASE_URL:latest,AUTH_SECRET=AUTH_SECRET:latest,AUTH_GOOGLE_ID=AUTH_GOOGLE_ID:latest,AUTH_GOOGLE_SECRET=AUTH_GOOGLE_SECRET:latest,ROOT_ADMIN_EMAIL=ROOT_ADMIN_EMAIL:latest,GOOGLE_PLACES_API_KEY=GOOGLE_PLACES_API_KEY:latest"
