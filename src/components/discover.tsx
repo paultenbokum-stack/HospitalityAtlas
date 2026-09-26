@@ -89,6 +89,7 @@ export function DiscoverClient({
 }) {
   const [area, setArea] = useState(presets[0]?.query ?? "");
   const [depth, setDepth] = useState<"quick" | "deep">("quick");
+  const [term, setTerm] = useState(""); // "" = all configured terms
   const [result, setResult] = useState<ScanResult | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [hideInCrm, setHideInCrm] = useState(false);
@@ -112,13 +113,14 @@ export function DiscoverClient({
       </div>
     );
 
+  const termCount = term ? 1 : terms.length;
   const visible = (result?.places ?? []).filter((p) => !(hideInCrm && p.companyId));
   const newCount = (result?.places ?? []).filter((p) => !p.companyId).length;
 
   function scan() {
     setMsg(null);
     start(async () => {
-      const r = await scanAction({ area, depth });
+      const r = await scanAction({ area, depth, term: term || null });
       if (!r.ok) return setMsg({ text: r.error, error: true });
       setResult(r.data);
       setSelected(new Set());
@@ -163,19 +165,32 @@ export function DiscoverClient({
           </datalist>
         </div>
         <div>
+          <label className="label" htmlFor="term">
+            Search for
+          </label>
+          <select id="term" className="input" value={term} onChange={(e) => setTerm(e.target.value)}>
+            <option value="">All terms ({terms.length})</option>
+            {terms.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
           <label className="label" htmlFor="depth">
             Depth
           </label>
           <select id="depth" className="input" value={depth} onChange={(e) => setDepth(e.target.value as "quick" | "deep")}>
-            <option value="quick">Quick ({terms.length} searches)</option>
-            <option value="deep">Deep 3×3 ({terms.length * 9} searches)</option>
+            <option value="quick">Quick ({termCount} {termCount === 1 ? "search" : "searches"})</option>
+            <option value="deep">Deep 3×3 ({termCount * 9} searches)</option>
           </select>
         </div>
         <button className="btn-primary" onClick={scan} disabled={pending || area.trim().length < 2}>
           {pending ? "Working…" : "Scan"}
         </button>
       </div>
-      <p className="text-xs text-muted">Searching for: {terms.join(", ") || "—"} (edit in Settings)</p>
+      <p className="text-xs text-muted">Searching for: {(term ? [term] : terms).join(", ") || "—"} (edit terms in Settings)</p>
 
       {msg && <p className={`text-sm ${msg.error ? "text-danger" : "text-accent"}`}>{msg.text}</p>}
 

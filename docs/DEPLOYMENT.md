@@ -17,7 +17,9 @@ test against a throwaway Postgres). The **deploy** job runs only when the repo v
 4. **Cloud SQL:** Postgres 16, smallest shared-core tier, `africa-south1`. Create database `atlas` and user
    `atlas` with a generated password.
 5. **Google keys** (APIs & Services → Credentials):
-   - *Places server key:* restrict to **Places API (New)** only. → secret `GOOGLE_PLACES_API_KEY`.
+   - *Places server key:* restrict to **Places API (New)** only, with application restriction **None** (or IP
+     addresses) — never HTTP referrers: server calls send no referrer, so Google returns 403
+     `API_KEY_HTTP_REFERRER_BLOCKED`. → secret `GOOGLE_PLACES_API_KEY`.
    - *Maps browser key:* restrict to **Maps JavaScript API** and HTTP referrer `https://<your-domain>/*`.
      → GitHub secret `NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY` (optional; without it Discover shows a list).
    - Set a Places **quota cap** per day (APIs → Places API → Quotas) so a runaway scan can't surprise you.

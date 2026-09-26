@@ -1,4 +1,4 @@
-# Decisions
++-# Decisions
 
 Binding record of *how it works and why*. Code follows this file; when you infer or agree a decision that
 isn't here, add it in the same change. Newest sections at the bottom.
@@ -32,6 +32,8 @@ isn't here, add it in the same change. Newest sections at the bottom.
 - Scan = resolve area → viewport; quick = 1 tile, deep = 3×3 tiles; each tile runs every workspace search
   term (≤20 results each), deduped by place id. **Cost ∝ terms × tiles**, so deep is capped at 3×3 and adding
   results never re-scans.
+- A scan can be narrowed to **one** configured search term (Discover → "Search for"; default all terms), so
+  reps don't pay for types they aren't after. The server only accepts a term that is in the workspace's list.
 
 ## Tenancy *(built)*
 - **Workspace** = tenant. Everything tenant-owned has `workspace_id`; repo functions take it first; actions

@@ -19,10 +19,17 @@ export async function scanAction(input: unknown) {
   return run<ScanResult>(async () => {
     const ctx = await requireRole("rep");
     const p = z
-      .object({ area: z.string().trim().min(2).max(120), depth: z.enum(["quick", "deep"]) })
+      .object({
+        area: z.string().trim().min(2).max(120),
+        depth: z.enum(["quick", "deep"]),
+        term: z.string().trim().max(120).nullish(), // one configured term, or all when absent
+      })
       .parse(input);
-    const terms = ctx.workspace.settings.discovery?.searchTerms ?? [];
-    if (!terms.length) throw new UserError("No discovery search terms configured — add some in Settings.");
+    const configured = ctx.workspace.settings.discovery?.searchTerms ?? [];
+    if (!configured.length) throw new UserError("No discovery search terms configured — add some in Settings.");
+    // Only configured terms may be scanned — the client can narrow the list, never extend it.
+    const terms = p.term ? configured.filter((t) => t === p.term) : configured;
+    if (!terms.length) throw new UserError(`"${p.term}" is no longer a search term — reload the page.`);
     const regionCode = ctx.workspace.settings.country ?? "ZA";
     try {
       const area = await resolveArea(p.area, regionCode);

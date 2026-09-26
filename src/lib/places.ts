@@ -71,6 +71,11 @@ async function searchText(body: Record<string, unknown>, fields: string[]): Prom
     body: JSON.stringify(body),
     cache: "no-store",
   });
+  // Key/permission problems are configuration, not bugs — surface them instead of a generic error.
+  if (res.status === 403) {
+    const reason = ((await res.json().catch(() => null)) as { error?: { message?: string } } | null)?.error?.message;
+    throw new PlacesNotConfigured(`Google rejected the Places key: ${reason ?? "permission denied"} Check the key's restrictions (docs/DEPLOYMENT.md).`);
+  }
   if (!res.ok) throw new Error(`Places searchText ${res.status}: ${(await res.text()).slice(0, 300)}`);
   return ((await res.json()) as { places?: RawPlace[] }).places ?? [];
 }
