@@ -8,7 +8,24 @@ Cost guardrail: under ~$30/month at idle, plus Places usage.
 CI (`.github/workflows/deploy.yml`) always runs lint, type-check, migrations and tests (including the tenancy
 test against a throwaway Postgres). The **deploy** job runs only when the repo variable `DEPLOY_ENABLED=true`.
 
-## One-time setup (owner does this)
+## One-time setup — automated (`scripts/gcp-setup.sh`)
+Run it in **Google Cloud Shell** (https://shell.cloud.google.com, signed in with the account that owns the
+billing account). The repo is private, so either upload the file (Cloud Shell ⋮ → Upload) or clone it with
+`gh auth login && gh repo clone paultenbokum-stack/HospitalityAtlas`. Then:
+```bash
+PROJECT_ID=atlas-crm-prod bash scripts/gcp-setup.sh     # use your project's ID if it already exists
+```
+It's safe to re-run: every step skips resources that already exist (e.g. an existing `atlas` Artifact
+Registry repo in `africa-south1`). It creates/links the project and billing, sets a budget alert, enables APIs,
+creates Cloud SQL with a generated password (kept in secret `DB_PASS`), both API keys with the right
+restrictions, all runtime secrets, a dedicated runtime service account, the GitHub deploy identity (Workload
+Identity Federation, locked to this repo), and — if you let it use `gh` — the GitHub secrets and
+`DEPLOY_ENABLED=true`. It pauses once for the **OAuth client**, which Google only lets you create in the
+console, and prints the Places quota-cap link at the end.
+
+The manual steps below are what the script does, for reference or troubleshooting.
+
+## One-time setup (manual reference)
 1. **Project:** Console → New project, e.g. `atlas-crm-prod`. Billing → link to the existing billing account.
    Billing → Budgets & alerts → a budget for this project (e.g. $40, alerts at 50/90/100%).
 2. **APIs:** enable Cloud Run, Cloud SQL Admin, Artifact Registry, Secret Manager, IAM Credentials,
@@ -29,13 +46,13 @@ test against a throwaway Postgres). The **deploy** job runs only when the repo v
 7. **Secret Manager** secrets: `DATABASE_URL` =
    `postgresql://atlas:<pw>@/atlas?host=/cloudsql/<project>:africa-south1:<instance>`, `AUTH_SECRET`
    (`openssl rand -base64 32`), `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `ROOT_ADMIN_EMAIL`,
-   `GOOGLE_PLACES_API_KEY`. Grant the Cloud Run runtime service account *Secret Manager Secret Accessor*
-   and *Cloud SQL Client*.
+   `GOOGLE_PLACES_API_KEY`. Create a runtime service account `atlas-runtime` with *Secret Manager Secret
+   Accessor* and *Cloud SQL Client* (Cloud Run runs as it — not the broad default compute account).
 8. **Deploy identity:** service account `github-deploy` with *Cloud Run Admin*, *Artifact Registry Writer*,
-   *Cloud SQL Client*, *Service Account User*. Workload Identity Federation pool + GitHub OIDC provider
+   *Cloud SQL Client*, and *Service Account User* on `atlas-runtime` only. Workload Identity Federation pool + GitHub OIDC provider
    restricted to `paultenbokum-stack/HospitalityAtlas`; allow it to impersonate `github-deploy`.
 9. **GitHub** → Settings → Secrets and variables → Actions:
-   - Secrets: `GCP_PROJECT_ID`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOY_SA`, `CLOUD_RUN_REGION`
+   - Secrets: `GCP_PROJECT_ID`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOY_SA`, `CLOUD_RUN_RUNTIME_SA`, `CLOUD_RUN_REGION`
      (`africa-south1`), `ARTIFACT_REPO` (`atlas`), `CLOUD_RUN_SERVICE` (`atlas-crm`), `CLOUD_SQL_INSTANCE`
      (`<project>:africa-south1:<instance>`), `DB_USER`, `DB_PASS`, `DB_NAME`, `ROOT_ADMIN_EMAIL`, `APP_URL`,
      `NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY`.

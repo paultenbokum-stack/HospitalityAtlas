@@ -78,6 +78,7 @@ jobs:
             --image "$IMAGE:${{ github.sha }}" \
             --region "${{ secrets.CLOUD_RUN_REGION }}" \
             --platform managed \
+            --service-account "${{ secrets.CLOUD_RUN_RUNTIME_SA }}" \
             --allow-unauthenticated \
             --min-instances 0 \
             --add-cloudsql-instances "${{ secrets.CLOUD_SQL_INSTANCE }}" \
