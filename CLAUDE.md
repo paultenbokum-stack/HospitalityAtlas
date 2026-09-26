@@ -6,6 +6,7 @@ First tenant: GuestWave (hospitality). Designed so an unrelated business (e.g. a
 own workspace with its own stages, reasons and attributes.
 
 ## Read these before making decisions
+- `docs/HANDOFF.md` — **start here**: current state, how to run locally, gotchas, next steps
 - `docs/DECISIONS.md` — **binding** behaviour and data rules. Append new decisions in the same change.
 - `docs/ARCHITECTURE.md` — stack, data model, tenancy
 - `docs/PLAN.md` — scope, milestones, non-goals
