@@ -454,7 +454,7 @@ export function DetailsPanel({ companyId, details }: { companyId: string; detail
         </form>
       ) : (
         <dl className="space-y-1">
-          {FIELDS.slice(3).map((f) =>
+          {FIELDS.map((f) =>
             details[f.key] ? (
               <div key={f.key} className="flex gap-2">
                 <dt className="w-24 shrink-0 text-muted">{f.label}</dt>
@@ -468,8 +468,8 @@ export function DetailsPanel({ companyId, details }: { companyId: string; detail
               <dd>{details.contactRoles.join(", ")}</dd>
             </div>
           )}
-          {!details.address && !details.phone && !details.website && !details.email && !details.contactRoles.length && (
-            <p className="text-muted">No details yet.</p>
+          {FIELDS.slice(1).every((f) => !details[f.key]) && !details.contactRoles.length && (
+            <p className="text-muted">No address or contact details yet. Use Edit to add them.</p>
           )}
         </dl>
       )}
